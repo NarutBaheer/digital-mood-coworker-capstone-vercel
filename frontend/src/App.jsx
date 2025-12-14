@@ -5,7 +5,13 @@ import JournalForm from "./components/JournalForm";
 import MoodChart from "./components/MoodChart";
 import { useMoodState, useMoodDispatch } from "./context/MoodContext";
 
-const API = import.meta.env.VITE_API_URL || "/api";
+// ✅ MUST be set in Vercel Env Vars
+// Example: https://digital-mood-backend.onrender.com
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE) {
+  console.warn("Missing VITE_API_BASE_URL (set it in Vercel + local .env)");
+}
 
 // Local-only encouragement (no external fetch)
 const LOCAL_QUOTES = [
@@ -32,19 +38,17 @@ function App() {
   const entries = Array.isArray(moodState?.entries) ? moodState.entries : [];
   const { loading, error, quote } = moodState || {};
 
-  // Co-worker stats
   const avgMood = entries.length
     ? (entries.reduce((sum, e) => sum + (e.mood || 0), 0) / entries.length).toFixed(1)
     : null;
 
   const latest = entries.length ? entries[entries.length - 1] : null;
 
-  // Helper to load entries from backend
   async function fetchEntries(currentToken) {
-    if (!currentToken) return;
+    if (!currentToken || !API_BASE) return;
     try {
       dispatch({ type: "SET_LOADING", payload: true });
-      const res = await axios.get(API + "/entries", {
+      const res = await axios.get(`${API_BASE}/api/entries`, {
         headers: { Authorization: "Bearer " + currentToken },
       });
       const data = Array.isArray(res.data) ? res.data : [];
@@ -60,7 +64,6 @@ function App() {
     }
   }
 
-  // On login/token change → load entries + set local quote
   useEffect(() => {
     if (!token) return;
     fetchEntries(token);
@@ -69,7 +72,8 @@ function App() {
 
   async function handleLogin(email, password) {
     try {
-      const res = await axios.post(API + "/auth/login", { email, password });
+      if (!API_BASE) return alert("Missing VITE_API_BASE_URL");
+      const res = await axios.post(`${API_BASE}/api/auth/login`, { email, password });
       setToken(res.data.token);
       localStorage.setItem("token", res.data.token);
     } catch (err) {
@@ -80,7 +84,8 @@ function App() {
 
   async function handleSignup(name, email, password) {
     try {
-      const res = await axios.post(API + "/auth/signup", { name, email, password });
+      if (!API_BASE) return alert("Missing VITE_API_BASE_URL");
+      const res = await axios.post(`${API_BASE}/api/auth/signup`, { name, email, password });
       setToken(res.data.token);
       localStorage.setItem("token", res.data.token);
     } catch (err) {
@@ -89,10 +94,10 @@ function App() {
     }
   }
 
-  // ✅ Google login handler
   async function handleGoogle(credentialResponse) {
     try {
-      const res = await axios.post(API + "/auth/google", {
+      if (!API_BASE) return alert("Missing VITE_API_BASE_URL");
+      const res = await axios.post(`${API_BASE}/api/auth/google`, {
         credential: credentialResponse.credential,
       });
       setToken(res.data.token);
@@ -104,14 +109,13 @@ function App() {
   }
 
   async function addEntry(data) {
-    if (!token) return;
+    if (!token || !API_BASE) return;
     try {
       dispatch({ type: "SET_LOADING", payload: true });
-      await axios.post(API + "/entries", data, {
+      await axios.post(`${API_BASE}/api/entries`, data, {
         headers: { Authorization: "Bearer " + token },
       });
 
-      // Reload entries and refresh local quote
       await fetchEntries(token);
       setLocalQuote(dispatch);
     } catch (err) {
@@ -128,7 +132,6 @@ function App() {
   return (
     <div className="app-shell">
       <div className="app-card">
-        {/* Header */}
         <header className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-6">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900 flex items-center gap-2">
@@ -158,7 +161,6 @@ function App() {
           )}
         </header>
 
-        {/* Content */}
         {!token ? (
           <section className="grid md:grid-cols-2 gap-8 items-start">
             <div className="hidden md:block">
@@ -179,7 +181,6 @@ function App() {
                 Login or create an account
               </h2>
 
-              {/* ✅ pass onGoogle */}
               <AuthForms onLogin={handleLogin} onSignup={handleSignup} onGoogle={handleGoogle} />
             </div>
           </section>
@@ -188,7 +189,6 @@ function App() {
             {loading && <p className="text-sm text-slate-500">Loading your entries…</p>}
             {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
 
-            {/* Journal + insights */}
             <div className="grid md:grid-cols-2 gap-6 items-start">
               <div className="section-card">
                 <h2 className="text-base font-semibold text-slate-900 mb-3">
@@ -218,7 +218,6 @@ function App() {
                   </div>
                 )}
 
-                {/* Motivational quote */}
                 <section className="quote-panel">
                   <h2 className="font-semibold mb-2 text-slate-900 text-sm">AI Encouragement</h2>
                   {quote ? (
@@ -233,7 +232,6 @@ function App() {
               </div>
             </div>
 
-            {/* Chart */}
             <div className="chart-card">
               <h2 className="text-base font-semibold text-slate-900 mb-3">Mood over time</h2>
               <MoodChart entries={entries} />
@@ -251,7 +249,6 @@ function AuthForms({ onLogin, onSignup, onGoogle }) {
 
   return (
     <div className="space-y-4">
-      {/* ✅ Google button */}
       <div className="pt-2">
         <GoogleLogin
           onSuccess={onGoogle}
