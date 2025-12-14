@@ -2,15 +2,17 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const dotenv = require("dotenv");
-//const path = require("path");
 
 dotenv.config();
 
 const app = express();
 
 // Middleware
+// NOTE: Put ONLY origins here (no trailing slash, no path).
+// Example: https://your-frontend.vercel.app
 const allowedOrigins = [
   process.env.FRONTEND_URL,
+  process.env.FRONTEND_URL_ALT, // optional second Vercel domain (recommended)
   "http://localhost:5173",
   "http://localhost:3000",
 ].filter(Boolean);
@@ -18,10 +20,14 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // allow requests with no origin (like curl/postman)
+      // Allow requests with no origin (curl/postman, server-to-server, etc.)
       if (!origin) return callback(null, true);
+
+      // Allow if the exact origin is in the list
       if (allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(new Error("CORS blocked: " + origin));
+
+      // Block others without throwing (cleaner than raising an error)
+      return callback(null, false);
     },
     credentials: true,
   })
@@ -41,27 +47,24 @@ mongoose
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("MongoDB connection error", err));
 
-// Models
-const User = require("./models/User");
-const Entry = require("./models/Entry");
+// Models (ok to keep even if unused)
+require("./models/User");
+require("./models/Entry");
 
 // API routes
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/entries", require("./routes/entries"));
 
-// Serve React build files from dist/
-//const distPath = path.join(__dirname, "dist");
-//app.use(express.static(distPath));
-
-// For any non-API route, send back React's index.html
-//app.get("*", (req, res) => {
-//  res.sendFile(path.join(distPath, "index.html"));
-//});
+// Health check
 app.get("/", (req, res) => {
   res.send("digital-mood-backend is running");
 });
 
-
+// Basic error handler (helps debugging)
+app.use((err, req, res, next) => {
+  console.error("Server error:", err);
+  res.status(500).json({ error: "Internal Server Error" });
+});
 
 // Use the port provided by the environment or 4000 locally
 const PORT = process.env.PORT || 4000;
